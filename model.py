@@ -7,7 +7,19 @@ from PIL import Image
 
 
 class DataGenerator(object):
+  """DataGenerator class generates the training and validation batches used in Keras model training.
+  """
+
   def __init__(self, image_paths, measurements, shuffle=True):
+    """The data set is automatically splitted into training and validation sets by 80:20 ratio.
+    Args:
+      image_paths: a list of paths to the training images.
+
+      measurements: a list of steering angles corresponding to each of the training image.
+
+    Note:
+      Each input image is augmented by flipping it left to right.
+    """
     self._image_paths = image_paths
     self._measurements = measurements
     assert(len(self._image_paths) == len(self._measurements))
@@ -23,7 +35,10 @@ class DataGenerator(object):
     self._image_shape = cv2.imread(image_paths[0]).shape
 
   def generate(self, mode='train'):
-    """mode = 'train' or 'valid'.
+    """Generate a generator based on the mode.
+
+    Args:
+      mode: a str, either 'train' or 'valid'.
     """
     if mode == 'train':
       mode_image_paths, mode_measurements = self._train_image_paths, self._train_measurements
@@ -49,15 +64,22 @@ class DataGenerator(object):
         yield np.array(X), np.array(y)
 
   def nb_train_samples(self):
+    """Number of training samples.
+    """
     return (self._num_train // self._batch_size) *  self._batch_size * 2  # data augmentation factor of 2
 
   def nb_valid_samples(self):
-    return (self._num_valid // self._batch_size) *  self._batch_size * 2
+    """Number of validation samples.
+    """
+    return (self._num_valid // self._batch_size) *  self._batch_size * 2  # data augmentation factor of 2
 
   def image_shape(self):
+    """Shape of the image.
+    """
     return self._image_shape
 
 
+# Create a list of image paths and corresponding steering angles. And use them to initialize a DataGenerator.
 data_dir = 'data'
 image_paths, measurements = [], []
 steer_correction = [0.0, 0.2, -0.2]
@@ -71,13 +93,13 @@ with open(os.path.join(data_dir, 'driving_log.csv'), 'r') as f:
     for i in range(3):
       image_paths.append(os.path.join(data_dir, line[i].strip()))
       measurements.append(float(line[3]) + steer_correction[i])
-      
 dgen = DataGenerator(image_paths, measurements)
 
+# Create the training and validation data generators.
 train_data = dgen.generate(mode='train')
 valid_data = dgen.generate(mode='valid')
-h, w, c = dgen.image_shape()
 
+# Construct a Keras model.
 from keras.models import Sequential
 from keras.layers import Flatten, Dense, Cropping2D, Convolution2D, MaxPooling2D, Dropout, Activation, Lambda, AveragePooling2D
 
@@ -108,8 +130,10 @@ model.add(Activation('relu'))
 model.add(Dropout(0.5))
 model.add(Dense(1))
 
+# Train the model.
 model.compile(loss='mse', optimizer='adam')
 model.fit_generator(generator=train_data, samples_per_epoch=dgen.nb_train_samples(), nb_epoch=4,
                     validation_data=valid_data, nb_val_samples=dgen.nb_valid_samples())
 
+# Save the model.
 model.save('model.h5')
